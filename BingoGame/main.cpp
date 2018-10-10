@@ -1,7 +1,12 @@
 
+#include <conio.h>
 #include <time.h>
 
 #include <iostream>
+#include <vector>
+#include <unordered_map>
+#include <functional>
+#include <algorithm>
 
 using namespace std;
 
@@ -55,12 +60,17 @@ private:
 
 	// 빙고 승리 횟수 설정
 	void setWin(int size) {
-		// 해당 빙고의 70%
-		this->win = (((size * 2 + 2) * 7) / 10);
+		if (getLevel() == 1) {	// EASY
+			// 해당 빙고의 70%
+			this->win = (((size * 2 + 2) * 7) / 10);
+		} else {				// HARD
+			// 해당 빙고의 50%
+			this->win = (((size * 2 + 2) * 5) / 10);
+		}
 	}
 
 	// EASY, HARD 여부 설정
-	int setLevel(int level) {
+	void setLevel(int level) {
 		if (level == 1) {
 			this->level = level;
 		}
@@ -158,7 +168,15 @@ private:
 	void printAIBingo() {
 		// 70% 이상 빙고하면 승리
 		int win = getWin();
-		cout << "AI Bingo: " << getAIBingoCount() << " / " << win << endl;
+
+		if (getLevel() == 1) {
+			cout << "EASY AI Bingo: ";
+		}
+		else {
+			cout << "HARD AI Bingo: ";
+		}
+
+		cout << getAIBingoCount() << " / " << win << endl;
 	}
 
 	// 설명 출력
@@ -212,6 +230,121 @@ private:
 		}
 		else {
 			// HARD
+
+			// 어느 위치가 제일 빙고 수가 많은지 체크
+			// bingoProcess 응용
+			int posX, posY;				// 현재 AI 좌표
+			int vertical = 0;			// 세로 빙고 정보
+			int horizontal = 0;			// 가로 빙고 정보
+			int diagonal = 0;			// 대각선 빙고 정보
+			int reverseDiagonal = 0;	// 역 대각선 빙고 정보
+			int bingo = 0;				// 빙고 횟수
+
+			unordered_map<int, int> bingoInfo;
+
+			for (int i = 0; i < mapSize; i++) {
+
+				bingo = 0;
+				vertical = 0;
+				horizontal = 0;
+				diagonal = 0;
+				reverseDiagonal = 0;
+
+				if (aiMap[i] == INT_MAX) {
+					continue;
+				}
+
+				for (int j = 0; j < size; j++) {
+					posX = i % size;
+					posY = i / size;
+
+					if (posX == posY) {
+						// 대각선 체크
+						if (map[i] == INT_MAX) {
+							diagonal++;
+						}
+						// 가로 체크
+						if (map[posY*size + j] == INT_MAX) {
+							horizontal++;
+						}
+						// 세로 체크
+						if (map[j*size + posX] == INT_MAX) {
+							vertical++;
+						}
+
+						// 홀수면서 정 가운데 수는 역대각선도 생각해야함
+						if ((size / 2) == posX) {
+							// 역 대각선 체크
+							if (map[((size - 1) - j) * size + j] == INT_MAX) {
+								reverseDiagonal++;
+							}
+						}
+					}
+					else if ((posX + posY) == (size - 1)) {
+						// 가로 체크
+						if (map[posY*size + j] == INT_MAX) {
+							horizontal++;
+						}
+						// 세로 체크
+						if (map[j*size + posX] == INT_MAX) {
+							vertical++;
+						}
+						// 역 대각선 체크
+						if (map[((size - 1) - j) * size + j] == INT_MAX) {
+							reverseDiagonal++;
+						}
+					}
+					else {
+						// 가로 체크
+						if (map[posY*size + j] == INT_MAX) {
+							horizontal++;
+						}
+						// 세로 체크
+						if (map[j*size + posX] == INT_MAX) {
+							vertical++;
+						}
+					}
+				}
+
+				// 실질적인 빙고 갯수
+				if (diagonal == size) {
+					bingo++;
+				}
+				if (horizontal == size) {
+					bingo++;
+				}
+				if (vertical == size) {
+					bingo++;
+				}
+				if (reverseDiagonal == size) {
+					bingo++;
+				}
+
+				bingoInfo.insert(pair<int, int>(aiMap[i], bingo));
+			}
+
+			// create a empty vector of pairs
+			std::vector< std::pair< int, int > > v;
+
+			// copy key-value pairs from the map to the vector
+			std::copy(bingoInfo.begin(), bingoInfo.end(), std::back_inserter<std::vector<pair<int, int>>>(v));
+
+			// sort
+			std::sort(v.begin(), v.end(), 
+				[](const pair<int, int>& l, const pair<int, int>& r) {
+					if (l.second != r.second)
+						return l.second > r.second;
+					return l.first < r.first;
+				});
+
+			num = v.at(0).first;
+
+			/*for (auto const &pair : v) {
+				std::cout << '{' << pair.first << "," << pair.second << '}' << endl;
+			}
+
+			cout << "num: " << num << endl;
+			_getch();*/
 		}
 
 		return num;
@@ -417,8 +550,9 @@ public:
 		b = tmp;
 	}
 
-	BingoGame(int size) {
+	BingoGame(int size, int level) {
 		// 맵 사이즈 설정
+		setLevel(level);
 		setSize(size);
 		setWin(size);
 
@@ -447,6 +581,9 @@ public:
 		while (getRun()) {
 			printGame();
 			num = inputGame();
+			if (num == 0) {
+				exit(0);
+			}
 			updateGame(num);
 			num = inputAIGame();
 			updateGame(num);
@@ -475,7 +612,18 @@ public:
 
 int main(void) {
 	srand((unsigned int)time(NULL));
-	BingoGame game = BingoGame(5);
+	
+	int level;
+	cout << "1. EASY MODE" << endl;
+	cout << "2. HARD MODE" << endl;
+	cout << "게임 레벨을 입력해주세요: ";
+	cin >> level;
+	if (level != 1) {
+		level = 2;
+	}
+	system("cls");
+
+	BingoGame game = BingoGame(5, level);
 	game.playGame();
 	return 0;
 }
